@@ -10,7 +10,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'dart:developer' as developer;
 import 'municipios.dart';
-import 'engineer_service.dart'; // Importar el servicio de ingenieros
+import 'engineer_service.dart';
 
 class OfficeScreen extends StatefulWidget {
   const OfficeScreen({super.key});
@@ -60,9 +60,11 @@ class _OfficeScreenState extends State<OfficeScreen> {
   Future<void> _exportAndShare(String? filter, String filterBy, {required bool isCsv}) async {
     final isEngineer = filterBy == 'engineer';
     if (filter == null || filter.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Por favor, seleccione un $filterBy primero.')),
-      );
+      if(mounted){
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Por favor, seleccione un $filterBy primero.')),
+        );
+      }
       return;
     }
 
@@ -216,37 +218,31 @@ class _OfficeScreenState extends State<OfficeScreen> {
     final fileName = 'Reporte_Fotos_${filter.replaceAll(' ', '_')}_${_getTimestamp()}.zip';
     final path = '${directory.path}/$fileName';
     await File(path).writeAsBytes(zipData);
-
+  
     if (!mounted) return;
     await Share.shareXFiles([XFile(path)], text: 'Reporte de fotos para $filter');
   }
 
   @override
   Widget build(BuildContext context) {
-    // Usamos el EngineerService del Provider
     final engineerService = Provider.of<EngineerService>(context, listen: false);
 
     return Scaffold(
       body: FutureBuilder<Engineer?>(
-        // El Future que vamos a resolver
         future: engineerService.getCurrentEngineerData(),
         builder: (context, snapshot) {
-          // --- ESTADO DE CARGA ---
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          // --- ESTADO DE ERROR ---
           if (snapshot.hasError) {
             return Center(child: Text('Error al cargar datos: ${snapshot.error}'));
           }
 
-          // --- ESTADO SIN DATOS (o sin usuario logueado) ---
           if (!snapshot.hasData) {
             return const Center(child: Text('No se pudo encontrar la información del ingeniero.'));
           }
 
-          // --- ESTADO CON DATOS ---
           final currentEngineer = snapshot.data;
 
           return SingleChildScrollView(
@@ -254,7 +250,6 @@ class _OfficeScreenState extends State<OfficeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                // Sección del ingeniero actual (sin título)
                 _buildSection(
                   displayWidget: ListTile(
                     leading: const Icon(Icons.person, color: Colors.deepPurple),
@@ -275,7 +270,6 @@ class _OfficeScreenState extends State<OfficeScreen> {
                 const Divider(thickness: 1.5),
                 const SizedBox(height: 16),
 
-                // Sección de municipios (sin título)
                 _buildSection(
                   displayWidget: _buildMunicipioAutocomplete(),
                   onExportCsv: () => _exportAndShare(_selectedMunicipio, 'municipio', isCsv: true),
@@ -371,9 +365,11 @@ class _OfficeScreenState extends State<OfficeScreen> {
         });
       },
       onSelected: (String selection) {
-        setState(() {
-          _selectedMunicipio = selection;
-        });
+        if(mounted){
+          setState(() {
+            _selectedMunicipio = selection;
+          });
+        }
       },
       fieldViewBuilder: (BuildContext context, TextEditingController fieldController, FocusNode focusNode, VoidCallback onFieldSubmitted) {
         return TextFormField(

@@ -10,19 +10,19 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.2
-  firebase_core: ^2.27.0
-  cloud_firestore: ^4.14.0
+  firebase_core: ^4.7.0
+  cloud_firestore: ^6.3.0
   permission_handler: ^12.0.1
   image_picker: ^1.0.7
-  firebase_storage: ^11.6.0
+  firebase_storage: ^13.3.0
   url_launcher: ^6.2.2
-  google_fonts: ^6.1.0
+  google_fonts: ^8.1.0
   provider: ^6.1.5+1
-  share_plus: ^7.2.2
-  package_info_plus: ^5.0.1
+  share_plus: ^12.0.2
+  package_info_plus: ^9.0.1
   path_provider: ^2.1.2
-  flutter_launcher_icons: "^0.13.1"
-  geolocator: ^11.1.0
+  flutter_launcher_icons: ^0.14.4
+  geolocator: ^14.0.2
   csv: ^6.0.0
   proj4dart: ^3.0.0
   exif: ^3.3.0
@@ -31,16 +31,17 @@ dependencies:
   intl: ^0.20.2
   archive: ^4.0.9
   http: ^1.2.0
-  firebase_auth: ^4.17.8
+  firebase_auth: ^6.4.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^2.0.0
+  flutter_lints: ^6.0.0
   gal: ^2.1.3
   flutter_image_compress: ^2.3.0
   rename: ^3.1.0
   mockito: ^5.6.4
+  firebase_core_platform_interface: ^6.0.3
 
 flutter_launcher_icons:
   android: true

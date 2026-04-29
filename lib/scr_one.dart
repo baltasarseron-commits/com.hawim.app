@@ -77,18 +77,24 @@ class _ScrOneState extends State<ScrOne> {
   }
 
   Future<void> _takePhoto() async {
+    // Validar el formulario primero
     if (!(_formKey.currentState?.validate() ?? false)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Por favor, complete todos los campos.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Por favor, complete todos los campos.')),
+        );
+      }
       return;
     }
 
+    // Usar el servicio para obtener los datos del ingeniero
     final engineerService = Provider.of<EngineerService>(context, listen: false);
-    // --- CORRECCIÓN 1: Usar 'await' para obtener los datos del ingeniero ---
     final engineer = await engineerService.getCurrentEngineerData();
-    final engineerName = engineer?.name;
 
+    // Comprobar si el widget sigue montado después de la operación asíncrona
+    if (!mounted) return;
+
+    final engineerName = engineer?.name;
     if (engineerName == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Error: No se ha identificado al ingeniero.')),
@@ -104,8 +110,11 @@ class _ScrOneState extends State<ScrOne> {
     if (!mounted || originalImageFile == null) return;
 
     final DateTime captureTime = DateTime.now();
+    // Obtener la posición final, ya sea la que se tenía o una nueva
     Position finalPosition =
         positionAtClick ?? await Geolocator.getCurrentPosition();
+
+    if (!mounted) return;
 
     XFile? processedImage;
     try {
@@ -170,13 +179,11 @@ class _ScrOneState extends State<ScrOne> {
   Widget build(BuildContext context) {
     final Color primaryColor = Theme.of(context).primaryColor;
 
-    // --- CORRECCIÓN 2: Se elimina el Scaffold y la AppBar anidada ---
     return Form(
       key: _formKey,
       child: ListView(
         padding: const EdgeInsets.all(16.0),
         children: <Widget>[
-          // --- CORRECCIÓN 3: Se añade un header con el saludo ---
           _buildWelcomeHeader(),
           const SizedBox(height: 16),
           _buildMunicipioAutocomplete(),
@@ -258,7 +265,6 @@ class _ScrOneState extends State<ScrOne> {
     );
   }
 
-  // Widget para mostrar el saludo de forma asíncrona
   Widget _buildWelcomeHeader() {
     final engineerService = Provider.of<EngineerService>(context, listen: false);
     return FutureBuilder<Engineer?>(
@@ -274,7 +280,6 @@ class _ScrOneState extends State<ScrOne> {
             textAlign: TextAlign.center,
           );
         }
-        // En caso de error o sin datos, no muestra nada o un texto genérico
         return Text(
             'Bienvenido',
             style: Theme.of(context).textTheme.headlineSmall,
@@ -295,9 +300,8 @@ class _ScrOneState extends State<ScrOne> {
         });
       },
       onSelected: (String selection) => _municipioController.text = selection,
-      fieldViewBuilder:
+      fieldViewBuilder: 
           (context, fieldController, focusNode, onFieldSubmitted) {
-        // Asignamos el controlador aquí para que el Autocomplete pueda manejarlo
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _municipioController.text = fieldController.text;
         });

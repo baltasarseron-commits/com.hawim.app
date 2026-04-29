@@ -68,7 +68,7 @@ class EngineerService with ChangeNotifier {
       }
       return e.message; // Otro tipo de error
     } catch (e) {
-      return e.toString();
+      return 'Ha ocurrido un error inesperado durante el registro.';
     }
   }
 
