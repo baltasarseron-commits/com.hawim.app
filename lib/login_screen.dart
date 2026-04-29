@@ -13,16 +13,14 @@ class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
 
-  // Variables para el modo de Login
-  String? _selectedEngineerId;
-
-  // Variables para el modo de Registro
+  // Controladores
+  final _emailController = TextEditingController();
   final _nameController = TextEditingController();
-
-  // Variables comunes
   final _pinController = TextEditingController();
+
+  // Estado
   bool _isLoading = false;
-  bool _isRegistering = false; // Controla el modo (Login vs. Registro)
+  bool _isRegistering = false;
 
   // Animación
   late AnimationController _animationController;
@@ -32,32 +30,22 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void initState() {
     super.initState();
-    // Cargar ingenieros sin notificar a los listeners
-    Provider.of<EngineerService>(context, listen: false).fetchEngineers();
-
-    // Configuración de la animación
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
-
-    _fadeAnimation =
-        CurvedAnimation(parent: _animationController, curve: Curves.easeIn);
-
-    _slideAnimation =
-        Tween<Offset>(begin: const Offset(0, 0.5), end: Offset.zero).animate(
-      CurvedAnimation(
-          parent: _animationController, curve: Curves.easeInOut),
+    _fadeAnimation = CurvedAnimation(parent: _animationController, curve: Curves.easeIn);
+    _slideAnimation = Tween<Offset>(begin: const Offset(0, 0.5), end: Offset.zero).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
-
-    // Iniciar la animación
     _animationController.forward();
   }
 
   @override
   void dispose() {
-    _pinController.dispose();
+    _emailController.dispose();
     _nameController.dispose();
+    _pinController.dispose();
     _animationController.dispose();
     super.dispose();
   }
@@ -67,52 +55,29 @@ class _LoginScreenState extends State<LoginScreen>
 
     setState(() => _isLoading = true);
 
-    final engineerService =
-        Provider.of<EngineerService>(context, listen: false);
-    final pin = _pinController.text;
+    final engineerService = Provider.of<EngineerService>(context, listen: false);
+    final email = _emailController.text.trim();
+    final pin = _pinController.text.trim();
+
+    String? errorMessage;
 
     if (_isRegistering) {
-      // --- Lógica de Registro ---
-      final name = _nameController.text;
-      final errorMessage = await engineerService.register(name, pin);
-
-      if (mounted) {
-        if (errorMessage == null) {
-          Navigator.pushReplacementNamed(context, '/home');
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(errorMessage),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
+      final name = _nameController.text.trim();
+      errorMessage = await engineerService.register(name, email, pin);
     } else {
-      // --- Lógica de Login ---
-      if (_selectedEngineerId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Por favor, seleccione un/a ingeniero/a.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        setState(() => _isLoading = false);
-        return;
+      final success = await engineerService.login(email, pin);
+      if (!success) {
+        errorMessage = 'Email o PIN incorrecto.';
       }
-      final success = await engineerService.login(_selectedEngineerId!, pin);
+    }
 
-      if (mounted) {
-        if (success) {
-          Navigator.pushReplacementNamed(context, '/home');
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('PIN o Ingeniero incorrecto. Inténtelo de nuevo.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+    if (mounted) {
+      if (errorMessage == null) {
+        // La navegación es manejada por el StreamBuilder en main.dart
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
+        );
       }
     }
 
@@ -124,19 +89,75 @@ class _LoginScreenState extends State<LoginScreen>
   void _toggleMode() {
     setState(() {
       _isRegistering = !_isRegistering;
-      // Limpia el estado del formulario y los controladores al cambiar de modo
       _formKey.currentState?.reset();
-      _pinController.clear();
+      _emailController.clear();
       _nameController.clear();
-      _selectedEngineerId = null;
+      _pinController.clear();
     });
+  }
+
+  void _forgotPin() {
+    final emailController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Recuperar PIN'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Introduce tu correo electrónico para recibir un enlace para restablecer tu PIN.'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: 'Email',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final email = emailController.text.trim();
+                if (email.isNotEmpty) {
+                  final service = Provider.of<EngineerService>(context, listen: false);
+                  final error = await service.forgotPin(email);
+                  Navigator.of(context).pop(); // Cierra el diálogo
+                  if (error == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Se ha enviado un correo de recuperación.'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(error),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+              child: const Text('Enviar'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-          title: Text(_isRegistering ? 'Registro' : 'Inicio de Sesión')),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
@@ -150,106 +171,73 @@ class _LoginScreenState extends State<LoginScreen>
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
-                    // --- ICONO DE LA APP ---
-                    Image.asset(
-                      'assets/images/hawimIcon(f).png',
-                      height: 120,
-                      width: 120,
+                    Image.asset('assets/images/hawimIcon(f).png', height: 100),
+                    const SizedBox(height: 24),
+                    Text(
+                      _isRegistering ? 'Crea tu Cuenta' : 'Bienvenido de Nuevo',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
                     ),
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 24),
 
                     // --- CAMPO DE NOMBRE (SOLO EN MODO REGISTRO) ---
                     if (_isRegistering)
                       TextFormField(
                         controller: _nameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Nombre Completo',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.person),
-                        ),
-                        validator: (value) =>
-                            _isRegistering && (value == null || value.isEmpty)
-                                ? 'Introduzca su nombre'
-                                : null,
-                      )
-                    else
-                      // --- DROPDOWN DE INGENIEROS (SOLO EN MODO LOGIN) ---
-                      Consumer<EngineerService>(
-                        builder: (context, engineerService, child) {
-                          if (engineerService.engineers.isEmpty &&
-                              !engineerService.isLoading) {
-                            return const Text(
-                                'No hay ingenieros registrados. Por favor, regístrese.',
-                                textAlign: TextAlign.center);
-                          }
-                          if (engineerService.isLoading) {
-                            return const Center(child: CircularProgressIndicator());
-                          }
-                          return DropdownButtonFormField<String>(
-                            decoration: const InputDecoration(
-                              labelText: 'Ingeniero/a',
-                              border: OutlineInputBorder(),
-                            ),
-                            value: _selectedEngineerId,
-                            items: engineerService.engineers.map((engineer) {
-                              return DropdownMenuItem<String>(
-                                value: engineer.id,
-                                child: Text(engineer.name),
-                              );
-                            }).toList(),
-                            onChanged: (value) {
-                              setState(() {
-                                _selectedEngineerId = value;
-                              });
-                            },
-                            validator: (value) => !_isRegistering && value == null
-                                ? 'Seleccione un/a ingeniero/a'
-                                : null,
-                          );
-                        },
+                        decoration: const InputDecoration(labelText: 'Nombre Completo', border: OutlineInputBorder()),
+                        validator: (value) => (value ?? '').isEmpty ? 'Introduce tu nombre' : null,
                       ),
-                    const SizedBox(height: 20),
+                    if (_isRegistering) const SizedBox(height: 16),
 
-                    // --- CAMPO DE PIN (COMÚN) ---
+                    // --- CAMPO DE EMAIL ---
                     TextFormField(
-                      controller: _pinController,
-                      decoration: const InputDecoration(
-                        labelText: 'PIN (Numérico)',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.lock),
-                      ),
-                      keyboardType: TextInputType.number,
-                      obscureText: true,
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(labelText: 'Correo Electrónico', border: OutlineInputBorder()),
                       validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Por favor, introduzca su PIN';
-                        }
+                        if ((value ?? '').isEmpty) return 'Introduce tu correo electrónico';
+                        if (!value!.contains('@')) return 'Introduce un correo válido';
                         return null;
                       },
                     ),
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 16),
 
-                    // --- BOTÓN DE SUBMIT (DINÁMICO) ---
-                    if (_isLoading)
-                      const Center(child: CircularProgressIndicator())
-                    else
-                      ElevatedButton(
-                        onPressed: _submit,
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 50, vertical: 15),
-                          textStyle: const TextStyle(fontSize: 18),
+                    // --- CAMPO DE PIN ---
+                    TextFormField(
+                      controller: _pinController,
+                      obscureText: true,
+                      decoration: const InputDecoration(labelText: 'PIN (mín. 6 caracteres)', border: OutlineInputBorder()),
+                      validator: (value) => (value?.length ?? 0) < 6 ? 'El PIN debe tener al menos 6 caracteres' : null,
+                    ),
+                    const SizedBox(height: 24),
+
+                    // --- BOTÓN DE SUBMIT ---
+                    _isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            onPressed: _submit,
+                            child: Text(_isRegistering ? 'Registrarse' : 'Iniciar Sesión'),
+                          ),
+                    const SizedBox(height: 16),
+
+                    // --- BOTÓN PARA CAMBIAR DE MODO Y OLVIDÉ PIN ---
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        TextButton(
+                          onPressed: _toggleMode,
+                          child: Text(_isRegistering ? '¿Ya tienes cuenta? Inicia Sesión' : '¿No tienes cuenta? Regístrate'),
                         ),
-                        child: Text(_isRegistering ? 'Registrar' : 'Entrar'),
-                      ),
-                    const SizedBox(height: 20),
-
-                    // --- BOTÓN PARA CAMBIAR DE MODO ---
-                    TextButton(
-                      onPressed: _toggleMode,
-                      child: Text(_isRegistering
-                          ? '¿Ya tienes una cuenta? Inicia sesión'
-                          : '¿Eres nuevo/a? Regístrate aquí'),
+                        if (!_isRegistering) // Solo mostrar si no se está registrando
+                          TextButton(
+                            onPressed: _forgotPin,
+                            child: const Text('Olvidé mi PIN'),
+                          ),
+                      ],
                     ),
                   ],
                 ),

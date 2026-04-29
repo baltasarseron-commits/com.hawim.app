@@ -85,10 +85,12 @@ class _ScrOneState extends State<ScrOne> {
     }
 
     final engineerService = Provider.of<EngineerService>(context, listen: false);
-    final engineerName = engineerService.currentEngineer?.name;
+    // --- CORRECCIÓN 1: Usar 'await' para obtener los datos del ingeniero ---
+    final engineer = await engineerService.getCurrentEngineerData();
+    final engineerName = engineer?.name;
 
     if (engineerName == null) {
-       ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Error: No se ha identificado al ingeniero.')),
       );
       return;
@@ -167,26 +169,16 @@ class _ScrOneState extends State<ScrOne> {
   @override
   Widget build(BuildContext context) {
     final Color primaryColor = Theme.of(context).primaryColor;
-    final engineerService = Provider.of<EngineerService>(context);
 
-    return Scaffold(
-       appBar: AppBar(
-        title: Text('Hola, ${engineerService.currentEngineer?.name ?? ""}'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () {
-              engineerService.logout();
-              Navigator.pushReplacementNamed(context, '/login');
-            },
-          ),
-        ],
-      ),
-      body:Form(
+    // --- CORRECCIÓN 2: Se elimina el Scaffold y la AppBar anidada ---
+    return Form(
       key: _formKey,
       child: ListView(
         padding: const EdgeInsets.all(16.0),
         children: <Widget>[
+          // --- CORRECCIÓN 3: Se añade un header con el saludo ---
+          _buildWelcomeHeader(),
+          const SizedBox(height: 16),
           _buildMunicipioAutocomplete(),
           const SizedBox(height: 16),
           _buildTextField(_caminoController, 'Camino'),
@@ -263,7 +255,33 @@ class _ScrOneState extends State<ScrOne> {
           ),
         ],
       ),
-    ),);
+    );
+  }
+
+  // Widget para mostrar el saludo de forma asíncrona
+  Widget _buildWelcomeHeader() {
+    final engineerService = Provider.of<EngineerService>(context, listen: false);
+    return FutureBuilder<Engineer?>(
+      future: engineerService.getCurrentEngineerData(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasData) {
+          return Text(
+            'Hola, ${snapshot.data?.name ?? "Ingeniero"}',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
+          );
+        }
+        // En caso de error o sin datos, no muestra nada o un texto genérico
+        return Text(
+            'Bienvenido',
+            style: Theme.of(context).textTheme.headlineSmall,
+            textAlign: TextAlign.center,
+          );
+      },
+    );
   }
 
   Widget _buildMunicipioAutocomplete() {
@@ -279,7 +297,10 @@ class _ScrOneState extends State<ScrOne> {
       onSelected: (String selection) => _municipioController.text = selection,
       fieldViewBuilder:
           (context, fieldController, focusNode, onFieldSubmitted) {
-        _municipioController.text = fieldController.text;
+        // Asignamos el controlador aquí para que el Autocomplete pueda manejarlo
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _municipioController.text = fieldController.text;
+        });
         return TextFormField(
           controller: fieldController,
           focusNode: focusNode,

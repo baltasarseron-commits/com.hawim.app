@@ -223,21 +223,46 @@ class _OfficeScreenState extends State<OfficeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<EngineerService>(
-      builder: (context, engineerService, child) {
-        final currentEngineer = engineerService.currentEngineer;
+    // Usamos el EngineerService del Provider
+    final engineerService = Provider.of<EngineerService>(context, listen: false);
 
-        return Scaffold(
-          body: SingleChildScrollView(
+    return Scaffold(
+      body: FutureBuilder<Engineer?>(
+        // El Future que vamos a resolver
+        future: engineerService.getCurrentEngineerData(),
+        builder: (context, snapshot) {
+          // --- ESTADO DE CARGA ---
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          // --- ESTADO DE ERROR ---
+          if (snapshot.hasError) {
+            return Center(child: Text('Error al cargar datos: ${snapshot.error}'));
+          }
+
+          // --- ESTADO SIN DATOS (o sin usuario logueado) ---
+          if (!snapshot.hasData) {
+            return const Center(child: Text('No se pudo encontrar la información del ingeniero.'));
+          }
+
+          // --- ESTADO CON DATOS ---
+          final currentEngineer = snapshot.data;
+
+          return SingleChildScrollView(
             padding: const EdgeInsets.all(16.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 // Sección del ingeniero actual (sin título)
                 _buildSection(
-                  displayWidget: const ListTile(
-                     leading: Icon(Icons.person, color: Colors.transparent),
-                     title: Text('Todos los datos'),
+                  displayWidget: ListTile(
+                    leading: const Icon(Icons.person, color: Colors.deepPurple),
+                    title: Text(
+                      currentEngineer?.name ?? 'Ingeniero Desconocido',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: const Text('Exportar todos mis datos'),
                   ),
                   onExportCsv: () => _exportAndShare(currentEngineer?.name, 'engineer', isCsv: true),
                   onExportImages: () => _exportAndShare(currentEngineer?.name, 'engineer', isCsv: false),
@@ -261,9 +286,9 @@ class _OfficeScreenState extends State<OfficeScreen> {
                 ),
               ],
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 

@@ -1,98 +1,120 @@
-import 'dart:developer' as developer;
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+// Modelo de datos para el Ingeniero
 class Engineer {
-  final String id;
+  final String id; // Corresponderá al UID de Firebase Auth
   final String name;
+  final String email;
 
-  Engineer({required this.id, required this.name});
+  Engineer({required this.id, required this.name, required this.email});
 
+  // Convertir un Engineer a un mapa para Firestore
+  Map<String, dynamic> toMap() {
+    return {
+      'name': name,
+      'email': email,
+    };
+  }
+
+  // Crear un Engineer desde un documento de Firestore
   factory Engineer.fromFirestore(DocumentSnapshot doc) {
-    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    Map data = doc.data() as Map<String, dynamic>;
     return Engineer(
       id: doc.id,
       name: data['name'] ?? '',
+      email: data['email'] ?? '',
     );
   }
 }
 
 class EngineerService with ChangeNotifier {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  Engineer? _currentEngineer;
-  List<Engineer> _engineers = [];
-  bool _isLoading = false;
 
-  Engineer? get currentEngineer => _currentEngineer;
-  List<Engineer> get engineers => _engineers;
-  bool get isLoading => _isLoading;
+  User? get currentUser => _auth.currentUser;
 
-  Future<void> fetchEngineers() async {
-    _isLoading = true;
-    // By awaiting a zero-duration delay, we allow the current build cycle
-    // to complete before calling notifyListeners(), which resolves the error.
-    await Future.delayed(Duration.zero);
-    notifyListeners();
-    
+  // --- REGISTRO DE UN NUEVO USUARIO ---
+  Future<String?> register(String name, String email, String pin) async {
     try {
-      final snapshot = await _firestore.collection('engineers').get();
-      _engineers = snapshot.docs.map((doc) => Engineer.fromFirestore(doc)).toList();
-    } catch (e, s) {
-      developer.log("Error fetching engineers", error: e, stackTrace: s);
-    } finally {
-      _isLoading = false;
+      // 1. Crear el usuario en Firebase Authentication
+      UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: pin, // Usamos el PIN como contraseña
+      );
+
+      User? user = userCredential.user;
+
+      if (user != null) {
+        // 2. Guardar la información adicional (nombre) en Firestore
+        await _firestore.collection('engineers').doc(user.uid).set({
+          'name': name,
+          'email': email,
+        });
+        notifyListeners();
+        return null; // Sin errores
+      }
+      return "No se pudo crear el usuario.";
+
+    } on FirebaseAuthException catch (e) {
+      // Manejar errores comunes de Firebase Auth
+      if (e.code == 'weak-password') {
+        return 'El PIN es demasiado débil. Debe tener al menos 6 caracteres.';
+      } else if (e.code == 'email-already-in-use') {
+        return 'Este correo electrónico ya está registrado.';
+      } else if (e.code == 'invalid-email') {
+        return 'El formato del correo electrónico no es válido.';
+      }
+      return e.message; // Otro tipo de error
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  // --- INICIO DE SESIÓN ---
+  Future<bool> login(String email, String pin) async {
+    try {
+      await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: pin, // Usamos el PIN como contraseña
+      );
       notifyListeners();
+      return true; // Login exitoso
+    } catch (e) {
+      return false; // Error en el login
     }
   }
 
-  Future<bool> login(String engineerId, String pin) async {
-    try {
-      final doc = await _firestore.collection('engineers').doc(engineerId).get();
-      if (doc.exists) {
-        final data = doc.data() as Map<String, dynamic>;
-        if (data['pin'] == pin) {
-          _currentEngineer = Engineer.fromFirestore(doc);
-          notifyListeners();
-          return true;
-        }
-      }
-      return false;
-    } catch (e, s) {
-      developer.log("Error logging in", error: e, stackTrace: s);
-      return false;
-    }
-  }
-
-  Future<String?> register(String name, String pin) async {
-    try {
-      final querySnapshot = await _firestore
-          .collection('engineers')
-          .where('name', isEqualTo: name)
-          .limit(1)
-          .get();
-
-      if (querySnapshot.docs.isNotEmpty) {
-        return 'Ya existe un/a ingeniero/a con este nombre.';
-      }
-
-      final newEngineerRef = await _firestore.collection('engineers').add({
-        'name': name,
-        'pin': pin,
-      });
-
-      _currentEngineer = Engineer(id: newEngineerRef.id, name: name);
-      
-      await fetchEngineers();
-
-      return null;
-    } catch (e, s) {
-      developer.log("Error registering engineer", error: e, stackTrace: s);
-      return 'Ocurrió un error durante el registro.';
-    }
-  }
-
-  void logout() {
-    _currentEngineer = null;
+  // --- CERRAR SESIÓN ---
+  Future<void> logout() async {
+    await _auth.signOut();
     notifyListeners();
+  }
+
+  // --- RECUPERAR CONTRASEÑA (PIN) ---
+  Future<String?> forgotPin(String email) async {
+    try {
+      await _auth.sendPasswordResetEmail(email: email);
+      return null; // Éxito
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'user-not-found') {
+        return "No hay ningún usuario registrado con este correo electrónico.";
+      }
+      return e.message;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  // --- OBTENER DATOS DEL INGENIERO ACTUAL ---
+  Future<Engineer?> getCurrentEngineerData() async {
+    if (currentUser != null) {
+      DocumentSnapshot doc = await _firestore.collection('engineers').doc(currentUser!.uid).get();
+      if (doc.exists) {
+        return Engineer.fromFirestore(doc);
+      }
+    }
+    return null;
   }
 }
